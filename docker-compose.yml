@@ -1,0 +1,92 @@
+version: "3.8"
+
+services:
+
+  # --- MongoDB für FlightService ---
+  mongo:
+    image: mongo:latest
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # --- SQL Server für BookingService ---
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    restart: unless-stopped
+    environment:
+      SA_PASSWORD: "YourStrong!Passw0rd"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/1433"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --- FlightService ---
+  flightservice:
+    build:
+      context: ./FlightService
+      dockerfile: Dockerfile
+    depends_on:
+      - mongo
+    environment:
+      FlightDatabaseSettings__ConnectionString: "mongodb://mongo:27017"
+      FlightDatabaseSettings__DatabaseName: "SkyBookerDb"
+      FlightDatabaseSettings__FlightsCollectionName: "flights"
+      JwtSettings__Key: "1jG8rD9wXc0Qe4ZlP2bYt7Nf3sUv6HpR"
+      JwtSettings__Issuer: "SkyBookerAuthService"
+      JwtSettings__Audience: "SkyBookerClient"
+      ASPNETCORE_URLS: "http://+:8080"
+    ports:
+      - "8080:8080"
+    networks:
+      - skybooker-net
+
+  # --- BookingService ---
+  bookingservice:
+    build:
+      context: ./BookingService
+      dockerfile: Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=BookingDb;User Id=sa;Password=YourStrong!Passw0rd;"
+      ASPNETCORE_URLS: "http://+:8090"
+    ports:
+      - "8090:8090"
+    networks:
+      - skybooker-net
+
+  # --- AuthService ---
+  authservice:
+    build:
+      context: ./AuthService
+      dockerfile: Dockerfile
+    volumes:
+      - auth-data:/data
+    environment:
+      ConnectionStrings__DefaultConnection: "Data Source=/data/auth.db"
+      JwtSettings__Key: "1jG8rD9wXc0Qe4ZlP2bYt7Nf3sUv6HpR"
+      JwtSettings__Issuer: "SkyBookerAuthService"
+      JwtSettings__Audience: "SkyBookerClient"
+      JwtSettings__ExpiresInMinutes: "60"
+      ASPNETCORE_URLS: "http://+:8070"
+    ports:
+      - "8070:8070"
+    networks:
+      - skybooker-net
+
+networks:
+  skybooker-net:
+
+volumes:
+  mongo-data:
+  sqlserver-data:
+  auth-data:
