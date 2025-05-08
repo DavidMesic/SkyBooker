@@ -5,8 +5,19 @@ using FlightService.Models;
 using FlightService.Services;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ==== Serilog konfigurieren ====
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateLogger();
+
+// Serilog als Provider einsetzen
+builder.Host.UseSerilog();
 
 // Konfiguration laden
 builder.Services.Configure<FlightDatabaseSettings>(
