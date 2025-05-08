@@ -2,8 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using BookingService.Data;
 using BookingService.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ==== Serilog konfigurieren ====
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateLogger();
+
+// Serilog als Provider einsetzen
+builder.Host.UseSerilog();
 
 // SQL Server DB-Kontext
 builder.Services.AddDbContext<BookingContext>(options =>
