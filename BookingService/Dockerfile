@@ -1,30 +1,36 @@
-# See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
-
-# This stage is used when running from VS in fast mode (Default for Debug configuration)
+# Stage: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
-USER $APP_UID
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
 
+# netcat installieren
+RUN apt-get update \
+ && apt-get install -y netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/*
 
-# This stage is used to build the service project
+# Stage: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["BookingService.csproj", "."]
 RUN dotnet restore "./BookingService.csproj"
 COPY . .
-WORKDIR "/src/."
-RUN dotnet build "./BookingService.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./BookingService.csproj" -c Release -o /app/build
 
-# This stage is used to publish the service project to be copied to the final stage
+# Stage: Publish
 FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./BookingService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./BookingService.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
+# Stage: Final
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "BookingService.dll"]
+
+# EntryPoint: warte auf SQL Server, dann starte
+ENTRYPOINT ["sh","-c", "\
+  echo 'Warte auf SQL Server...'; \
+  until nc -z sqlserver 1433; do \
+    echo 'SQL noch nicht erreichbar, warte 2s...'; \
+    sleep 2; \
+  done; \
+  echo 'SQL erreichbar – starte BookingService'; \
+  exec dotnet BookingService.dll \
+"]

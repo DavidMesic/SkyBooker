@@ -1,7 +1,11 @@
-# Stage: Runtime (production)
+# Stage: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
-EXPOSE 80
+
+# netcat installieren, damit nc im entrypoint funktioniert
+RUN apt-get update \
+ && apt-get install -y netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/*
 
 # Stage: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
@@ -19,4 +23,8 @@ RUN dotnet publish "./MessageService.csproj" -c Release -o /app/publish /p:UseAp
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "MessageService.dll"]
+ENTRYPOINT ["sh","-c", \
+  "echo 'Warte auf RabbitMQ…'; \
+   until nc -z rabbitmq 5672; do echo 'noch nicht da…'; sleep 2; done; \
+   echo 'RabbitMQ da – starte Service'; \
+   exec dotnet MessageService.dll" ]
