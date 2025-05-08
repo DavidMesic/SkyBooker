@@ -5,8 +5,19 @@ using Microsoft.OpenApi.Models;
 using AuthService.Data;
 using AuthService.Services;
 using System.Text;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ==== Serilog konfigurieren ====
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateLogger();
+
+// Serilog als Logging-Provider einsetzen
+builder.Host.UseSerilog();
 
 // Datenbank (SQLite)
 builder.Services.AddDbContext<AuthDbContext>(options =>
